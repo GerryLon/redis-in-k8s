@@ -90,13 +90,14 @@ def exists_resource(resource, pattern, namespace="default", bool_result=True):
     else:
         return {the quantum of the resource}
     """
+    config = json_load("redis.json")
     try:
         if len(resource) == 0 or len(pattern) == 0:
             if bool_result:
                 return False
             else:
                 return 0
-        cmd = "/root/local/bin/kubectl get " + \
+        cmd = config["kubectl_command"] + " get " + \
               str(resource) + " -n " + namespace + " | grep \"" + \
             str(pattern) + "\" | wc -l 2>/dev/null"
         run = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
@@ -131,11 +132,11 @@ def check_config(config):
                 print("in hostnetowrk mode,make sure nodes >= redis_statefulset_replicas")
                 return False
 
-        # redis_data_size > 0 
+        # redis_data_size > 0
         if int(config["redis_data_size"]) <= 0 and config["persistent_flag"]:
             print("make sure redis_data_size > 0")
             return False
-                
+
         return True
     except Exception:
         print("Wrong arguments!")
@@ -162,7 +163,7 @@ def install_redis():
 
         # install redis component
         result = os.system(
-            "/root/local/bin/kubectl create -f #path#/yaml/"
+            config["kubectl_command"] + " create -f #path#/yaml/"
             .replace("#path#", current_path)
         )
 
@@ -187,17 +188,17 @@ def uninstall_redis():
     """
     config = json_load("redis.json")
     result = os.system(
-        "/root/local/bin/kubectl get statefulset -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete statefulset ;"
-        "/root/local/bin/kubectl get deployment -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete deployment ;"
-        "/root/local/bin/kubectl get service -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete service ;"
-        "/root/local/bin/kubectl get serviceaccount -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete serviceaccount ;"
-        "/root/local/bin/kubectl get clusterrole -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete clusterrole ;"
-        "/root/local/bin/kubectl get clusterrolebinding -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete clusterrolebinding ;"
+        config["kubectl_command"] + " get statefulset -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete statefulset ;"
+        config["kubectl_command"] + " get deployment -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete deployment ;"
+        config["kubectl_command"] + " get service -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete service ;"
+        config["kubectl_command"] + " get serviceaccount -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete serviceaccount ;"
+        config["kubectl_command"] + " get clusterrole -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete clusterrole ;"
+        config["kubectl_command"] + " get clusterrolebinding -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete clusterrolebinding ;"
     )
 
     if config["persistent_flag"]:
         result = os.system(
-            "/root/local/bin/kubectl get pvc -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete pvc")
+            config["kubectl_command"] + " get pvc -l app=redis | grep -v NAME | awk '{print $1}' | xargs /root/local/bin/kubectl delete pvc")
         if result == 0:
             while True:
                 if exists_resource("endpoints", "redisdata"):
@@ -244,7 +245,7 @@ def scale_redis(new_replicas):
 
         if old_replicas < new_replicas:
             result = os.system(
-                "/root/local/bin/kubectl scale statefulset sts-redis-cluster --replicas={}".format(new_replicas))
+                config["kubectl_command"] + " scale statefulset sts-redis-cluster --replicas={}".format(new_replicas))
             if result == 0:
                 config["redis_statefulset_replicas"] = str(new_replicas)
                 write_file(json.dumps(config, indent=1),
@@ -269,8 +270,9 @@ def check_redis(return_code=False):
 |  5   |      Could not find redis cluster     |
 +------+---------------------------------------+
     """
+    config = json_load("redis.json")
     try:
-        run = subprocess.Popen("/root/local/bin/kubectl exec -it $(/root/local/bin/kubectl get po | grep redis-ctrl-center | awk '{print $1}')  /bin/sh /redis-plus.sh health 2>/dev/null",
+        run = subprocess.Popen(config["kubectl_command"] + " exec -it $(/root/local/bin/kubectl get po | grep redis-ctrl-center | awk '{print $1}')  /bin/sh /redis-plus.sh health 2>/dev/null",
                                shell=True,
                                stdout=subprocess.PIPE)
         rr = run.stdout.read()
